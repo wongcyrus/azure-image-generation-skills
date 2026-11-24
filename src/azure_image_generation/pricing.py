@@ -16,12 +16,15 @@ class PriceVerificationError(ValueError):
 
 
 class PriceVerifier:
-    def __init__(self, settings, output_dir, *, now=None):
+    def __init__(self, settings, output_dir, *, now=None, operation="generate"):
+        if operation not in ("generate", "edit"):
+            raise ValueError("Unsupported image operation")
         self.settings = settings
         self.output_dir = output_dir
         self.now = now or (lambda: datetime.now(timezone.utc))
         self.blocked = False
         self.recorded = False
+        self.operation = operation
 
     def verify(self):
         if self.blocked:
@@ -74,15 +77,23 @@ class PriceVerifier:
                 or url.port not in (None, 443) or url.username or url.password or url.query or url.fragment
                 or not any(part in url.path for part in ("pricing", "/retail/prices"))):
             raise PriceVerificationError("Use an official Microsoft HTTPS pricing reference")
+        required = ("input", "cached", "output", "image")
+        if self.operation == "edit":
+            operations = source.get("image_operations")
+            if (not isinstance(operations, list) or "edit" not in operations
+                    or source.get("image_token_unit") != "USD per million image tokens"):
+                raise PriceVerificationError("Image editing needs explicit reviewed edit and image-token evidence")
+            required += ("image_input", "image_output")
         rates = {}
-        for key in ("input", "cached", "output", "image"):
+        for key in required:
             value = row.get(key)
             if type(value) not in (int, float) or not math.isfinite(value) or value < 0:
-                raise PriceVerificationError("All four reviewed image rates must be finite and nonnegative")
+                raise PriceVerificationError("Required reviewed image rates must be finite and nonnegative")
             rates[key] = float(value)
         if not self.recorded:
             evidence = {"checked_at": now.isoformat(), "config_sha256": settings.sha256,
-                        "deployment": settings.model, "kind": "image", "rates": rates, "source": source}
+                        "deployment": settings.model, "kind": "image", "operation": self.operation,
+                        "rates": rates, "source": source}
             with (self.output_dir / "azure_price_checks.jsonl").open("x", encoding="utf-8") as file:
                 file.write(json.dumps(evidence) + "\n")
             self.recorded = True

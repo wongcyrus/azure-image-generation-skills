@@ -15,6 +15,7 @@ import yaml
 from azure_image_generation.client import AzureImageClient
 from azure_image_generation.config import load_settings
 from azure_image_generation.generation import generate_image, usage_summary
+from azure_image_generation.inputs import load_input_images
 from azure_image_generation.pricing import PriceVerificationError, PriceVerifier, UNIT
 
 
@@ -192,3 +193,129 @@ class TestImageGeneration(unittest.TestCase):
         )
         self.assertEqual(events, ["prices", "image"])
         sdk.close.assert_called_once()
+
+    def input_image(self, name="reference.png", image_format="PNG"):
+        path = self.root / name
+        Image.new("RGB", (64, 48), "blue").save(path, format=image_format)
+        return path
+
+    def enable_edit(self):
+        source = self.config["pricing_sources"]["image-alias"]
+        source["image_operations"] = ["generate", "edit"]
+        source["image_token_unit"] = "USD per million image tokens"
+        self.config["pricing"]["image-alias"].update(image_input=4, image_output=12)
+        self.save()
+        self.response.usage = SimpleNamespace(
+            input_tokens=100, output_tokens=200,
+            input_tokens_details=SimpleNamespace(text_tokens=30, image_tokens=70, cached_tokens=0),
+            output_tokens_details=SimpleNamespace(text_tokens=0, image_tokens=200),
+        )
+        self.client.edit.return_value = self.response
+
+    def test_reference_preview_validates_files_without_network_or_writes(self):
+        reference = self.input_image()
+        with patch("azure_image_generation.generation.PriceVerifier") as verifier:
+            self.assertIsNone(generate_image(self.path, self.prompt, self.output,
+                                            input_images=[reference]))
+        verifier.assert_not_called()
+        self.client_class.assert_not_called()
+        self.assertFalse(self.output.exists())
+
+    def test_bad_unsupported_or_excess_inputs_block_before_client_or_output(self):
+        invalid = self.root / "bad.png"
+        invalid.write_bytes(b"not an image")
+        unsupported = self.input_image("reference.gif", "GIF")
+        for inputs in ([invalid], [unsupported], [invalid] * 17):
+            with self.subTest(inputs=len(inputs)), self.assertRaises((ValueError, OSError)):
+                generate_image(self.path, self.prompt, self.output, confirm_cost=True,
+                               input_images=inputs)
+        self.client_class.assert_not_called()
+        self.assertFalse(self.output.exists())
+
+    def test_edit_requires_explicit_reviewed_operation_and_image_rates(self):
+        reference = self.input_image()
+        with self.assertRaises(PriceVerificationError):
+            generate_image(self.path, self.prompt, self.output, confirm_cost=True,
+                           input_images=[reference])
+        self.enable_edit()
+        del self.config["pricing"]["image-alias"]["image_input"]
+        self.save()
+        with self.assertRaises(PriceVerificationError):
+            generate_image(self.path, self.prompt, self.root / "missing-rate", confirm_cost=True,
+                           input_images=[reference])
+        self.client_class.assert_not_called()
+
+    def test_edit_sends_ordered_validated_snapshots_and_retains_private_input_evidence(self):
+        self.enable_edit()
+        first = self.input_image()
+        second = self.input_image("second.jpg", "JPEG")
+        first_bytes = first.read_bytes()
+        self.client_class.return_value.__enter__.side_effect = (
+            lambda: (first.write_bytes(b"changed after validation"), self.client)[1]
+        )
+        target = generate_image(self.path, self.prompt, self.output, confirm_cost=True,
+                                input_images=[first, second])
+        self.assertTrue(target.is_file())
+        self.client.generate.assert_not_called()
+        self.client.edit.assert_called_once()
+        images = self.client.edit.call_args.args[1]
+        self.assertEqual(images[0].data, first_bytes)
+        self.assertEqual([item.mime_type for item in images], ["image/png", "image/jpeg"])
+        self.assertEqual([item.upload_name for item in images], ["reference-01.png", "reference-02.jpg"])
+        evidence = json.loads((self.output / "inputs.json").read_text())
+        self.assertEqual(len(evidence["images"]), 2)
+        self.assertNotIn(str(self.root), (self.output / "inputs.json").read_text())
+        summary = json.loads((self.output / "cost_summary.json").read_text())
+        self.assertEqual(summary["operation"], "edit")
+        self.assertAlmostEqual(summary["total_cost_usd"], 0.00274)
+        prices = json.loads((self.output / "azure_price_checks.jsonl").read_text())
+        self.assertEqual(prices["operation"], "edit")
+
+    def test_edit_transport_verifies_then_calls_edits_once_without_generation_fallback(self):
+        images = load_input_images([self.input_image()])
+        sdk = Mock()
+        sdk.with_options.return_value = sdk
+        sdk.images.edit.side_effect = TimeoutError("No details")
+        verifier = Mock(operation="edit")
+        client = AzureImageClient.__new__(AzureImageClient)
+        client.settings = load_settings(self.path)
+        client.verifier = verifier
+        client.sdk = sdk
+        with self.assertRaises(TimeoutError):
+            client.edit("Use the reference.", images)
+        verifier.verify.assert_called_once()
+        sdk.with_options.assert_called_once_with(max_retries=0)
+        sdk.images.edit.assert_called_once_with(
+            model="image-alias", prompt="Use the reference.", size="1536x1024", quality="auto",
+            output_format="png", n=1, image=[("reference-01.png", images[0].data, "image/png")],
+        )
+        sdk.images.generate.assert_not_called()
+        verifier.verify.side_effect = PriceVerificationError("blocked")
+        sdk.reset_mock()
+        with self.assertRaises(PriceVerificationError):
+            client.edit("Use the reference.", images)
+        sdk.images.edit.assert_not_called()
+
+    def test_edit_failure_is_unpriced_with_no_retry_or_generation_fallback(self):
+        self.enable_edit()
+        self.client.edit.side_effect = TimeoutError("No details")
+        with self.assertRaises(TimeoutError):
+            generate_image(self.path, self.prompt, self.output, confirm_cost=True,
+                           input_images=[self.input_image()])
+        self.client.edit.assert_called_once()
+        self.client.generate.assert_not_called()
+        summary = json.loads((self.output / "cost_summary.json").read_text())
+        self.assertEqual(summary["operation"], "edit")
+        self.assertIsNone(summary["total_cost_usd"])
+
+    def test_edit_cost_needs_complete_uncached_category_counts(self):
+        self.enable_edit()
+        rates = self.config["pricing"]["image-alias"]
+        self.assertAlmostEqual(usage_summary(self.response.usage, rates, operation="edit")["total_cost_usd"],
+                               0.00274)
+        for details in (None, SimpleNamespace(text_tokens=0, image_tokens=199)):
+            self.response.usage.output_tokens_details = details
+            self.assertIsNone(usage_summary(self.response.usage, rates, operation="edit")["total_cost_usd"])
+        self.response.usage.output_tokens_details = SimpleNamespace(text_tokens=0, image_tokens=200)
+        self.response.usage.input_tokens_details.cached_tokens = 10
+        self.assertIsNone(usage_summary(self.response.usage, rates, operation="edit")["total_cost_usd"])

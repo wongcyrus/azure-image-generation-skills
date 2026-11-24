@@ -3,8 +3,9 @@ name: azure-image-generation
 description: >-
   Creates illustrations and infographics through the user's Azure OpenAI image
   deployment using an independent image-generation package. Requires explicit
-  cost consent and current reviewed pricing. Never substitutes another provider.
-version: 1
+  cost consent and current reviewed pricing. Supports optional local reference
+  images/editing; defaults to text-only. Never substitutes another provider.
+version: 2
 ---
 
 # Azure image generation
@@ -49,6 +50,8 @@ Never guess rates or refresh an attestation timestamp without reviewing prices.
    Preview makes no network calls or writes. It does not certify prices or access.
 3. Obtain explicit approval for one paid request, then add `--confirm-cost`.
    Do not bypass pricing failures, retry automatically or substitute providers.
+   If input images are selected, consent must cover transmitting all their bytes
+   and embedded metadata. Never infer that consent from a file being present.
 4. Inspect the PNG's labels, arrows, readability and factual claims. Local label
    corrections do not need provider calls; retain the original. Verify technical
    labels against the relevant application source, not a guessed format.
@@ -57,7 +60,27 @@ Never guess rates or refresh an attestation timestamp without reviewing prices.
 
 Exactly one image is requested, with SDK retries disabled. Existing attempt
 directories are rejected, including failed attempts. Timeouts can still be billed.
-Text-to-image is supported at fixed `1536x1024`; image editing is not implemented.
+Text-to-image is the default at fixed `1536x1024`. Optional repeated
+`--input-image "/private/reference.png"` (alias `--reference-image`) selects
+the Images Edits API instead. Up to 16 local single-frame PNG/JPEG/WebP files
+are accepted, each smaller than 50 MB. Preview validates them offline. The
+principal image comes first; describe the role of other images in the prompt.
+Files are snapshotted before calls and never modified. The private attempt
+records input hashes and generic upload names, not original file paths.
+
+Editing needs separately reviewed evidence: `image_operations` must include
+`edit`; `image_token_unit` must be `USD per million image tokens`; pricing must
+include `image_input` and `image_output`, alongside the existing rates. For
+edits, `input`/`output` price text tokens and the new fields price image tokens.
+Do not silently reuse generation-only pricing or update dates without review.
+Missing category usage or unallocatable cached usage stays unpriced.
+Use `examples/edit.config.example.yaml` in the independent repository.
+
+Do not fall back from a failed edit to another paid call. Reference input does
+not guarantee exact logo, text or identity preservation. For branding, use
+authorized original assets and deterministic local compositing instead of
+asking AI to redraw logos. Masks, URL inputs and inpainting controls are not
+implemented. Deployment editing capability still needs verification.
 
 Prefer editable Mermaid/SVG for precise technical diagrams, generated artwork
 for explanatory illustrations, and real synthetic-demo captures for screenshots.

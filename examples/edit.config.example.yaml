@@ -1,0 +1,33 @@
+azure_openai:
+  endpoint: https://YOUR-RESOURCE.openai.azure.com
+  api_version: v1
+models:
+  image: YOUR-IMAGE-DEPLOYMENT
+deployment_models:
+  YOUR-IMAGE-DEPLOYMENT: gpt-image-REPLACE-WITH-DEPLOYED-FAMILY
+pricing_lookup:
+  region: REPLACE-WITH-ARM-REGION
+  deployment_type: global-standard
+pricing:
+  YOUR-IMAGE-DEPLOYMENT:
+    input: null
+    cached: null
+    output: null
+    image: null
+    image_input: null
+    image_output: null
+pricing_sources:
+  YOUR-IMAGE-DEPLOYMENT:
+    model: gpt-image-REPLACE-WITH-DEPLOYED-FAMILY
+    verification: manual
+    verified_at: null
+    azure_endpoint: https://YOUR-RESOURCE.openai.azure.com
+    region: REPLACE-WITH-ARM-REGION
+    deployment_type: global-standard
+    currency: USD
+    unit: "USD per million tokens; image USD per generated image"
+    image_size: 1536x1024
+    image_quality: auto
+    image_operations: [generate, edit]
+    image_token_unit: "USD per million image tokens"
+    source: https://azure.microsoft.com/en-us/pricing/details/azure-openai/

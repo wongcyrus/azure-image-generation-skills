@@ -49,3 +49,15 @@ class AzureImageClient:
             model=self.settings.model, prompt=prompt, size=IMAGE_SIZE,
             quality=IMAGE_QUALITY, n=1,
         )
+
+    def edit(self, prompt, images):
+        if not images:
+            raise ValueError("Image editing requires at least one validated input image")
+        if self.verifier.operation != "edit":
+            raise ValueError("Image editing requires an edit-specific price verifier")
+        self.verifier.verify()
+        return self.sdk.with_options(max_retries=0).images.edit(
+            model=self.settings.model, prompt=prompt, size=IMAGE_SIZE,
+            quality=IMAGE_QUALITY, output_format="png", n=1,
+            image=[(item.upload_name, item.data, item.mime_type) for item in images],
+        )
