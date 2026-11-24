@@ -1,0 +1,35 @@
+Create a polished landscape educational infographic, 1536 by 1024 pixels.
+Audience: school teachers considering a human-reviewed Azure handwriting grader.
+Style: clean flat vector illustration, generous whitespace, crisp readable English
+text, navy and blue palette, amber approval accents and green finished outputs.
+No Microsoft logo, no fake software screenshot, no identifiable people or student data.
+
+Title, exactly: "Teacher-reviewed AI marking"
+Subtitle, exactly: "AI drafts. Teachers decide."
+
+Show six numbered cards in an unambiguous left-to-right sequence: cards 1, 2, 3
+across the top, then cards 4, 5, 6 across the bottom. Connect 3 down to 4 with a
+clear connector routed outside the cards. Use simple paper, checklist, shield,
+cloud, teacher-review and PDF icons. Keep all text large and readable.
+
+Card 1 heading: "1. Prepare"
+Card 1 text: "Scans, roster and marking scheme"
+Card 2 heading: "2. Approve inputs"
+Card 2 text: "Check rubric and answer crops"
+Card 3 heading: "3. Check cost"
+Card 3 text: "Consent + verified prices"
+Card 4 heading: "4. AI drafts"
+Card 4 text: "Azure OpenAI proposes marks"
+Card 5 heading: "5. Teacher reviews"
+Card 5 text: "Verify identities and scores"
+Card 6 heading: "6. Create reports"
+Card 6 text: "PDF filenames include ID + name"
+For any decorative filename examples, use the actual format:
+"12345_Taylor_script-00001.pdf", "67890_Patel_script-00002.pdf",
+and "24680_Chen_script-00003.pdf". These are synthetic examples, not real students.
+
+Visually identify card 4 as the paid Azure AI stage; the other cards represent
+local preparation, explicit consent or human review. Do not imply that the AI
+can approve marks or send email.
+Footer, exactly: "Review before sharing. Email requires separate approval."
+Add a small caption: "Illustrative workflow - not an app screenshot"

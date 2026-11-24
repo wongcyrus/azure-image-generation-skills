@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "azure-image-generation-skills"
+version = "0.1.0"
+description = "Independent Azure OpenAI image generation with explicit consent and reviewed pricing"
+requires-python = ">=3.11"
+dependencies = [
+  "openai==3.57.0",
+  "azure-identity>=1.25,<2",
+  "Pillow>=11,<13",
+  "PyYAML>=6,<7",
+]
+
+[project.scripts]
+azure-image = "azure_image_generation.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
